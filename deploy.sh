@@ -223,10 +223,17 @@ echo "Node.js 目录: $NODE_DIR"
 # If Node.js is in /usr/local/bin or /usr/bin, we need to adjust security settings
 if [[ "$NODE_DIR" == "/usr/local/bin" ]] || [[ "$NODE_DIR" == "/usr/bin" ]]; then
     echo "调整 systemd 安全设置以允许执行 Node.js..."
-    # Change ProtectSystem=strict to ProtectSystem=true
-    # ProtectSystem=true allows read/execute but restricts write access (more permissive than strict)
-    sed -i "s|^ProtectSystem=strict|ProtectSystem=true|" "$TEMP_SERVICE"
-    echo "已将 ProtectSystem=strict 改为 ProtectSystem=true"
+    # Completely remove ProtectSystem to allow execution
+    # This is necessary because ProtectSystem=strict/true can block execution
+    sed -i "/^ProtectSystem=/d" "$TEMP_SERVICE"
+    echo "已移除 ProtectSystem 限制"
+    
+    # Also ensure PATH is set for the service user
+    if ! grep -q "^Environment=PATH=" "$TEMP_SERVICE"; then
+        # Add PATH environment variable after existing Environment lines
+        sed -i "/^Environment=.*/a Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" "$TEMP_SERVICE"
+        echo "已添加 PATH 环境变量"
+    fi
 fi
 
 # Verify the service file
@@ -239,6 +246,11 @@ else
     grep "^ExecStart=" "$TEMP_SERVICE"
 fi
 
+# Display full service file for debugging
+echo "完整的服务文件内容:"
+cat "$TEMP_SERVICE"
+echo "---"
+
 # Copy to systemd directory
 sudo cp "$TEMP_SERVICE" /etc/systemd/system/$SERVICE_NAME
 sudo chmod 644 /etc/systemd/system/$SERVICE_NAME
@@ -246,6 +258,27 @@ rm -f "$TEMP_SERVICE"
 
 sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
+
+# Test if the command can be executed as the service user before starting
+echo "测试服务用户是否可以执行命令..."
+DEPLOY_USER=$(whoami)
+if sudo -u "$DEPLOY_USER" "$NODE_CMD" --version &> /dev/null; then
+    echo "✓ 服务用户可以执行 Node.js"
+else
+    echo "✗ 警告: 服务用户无法执行 Node.js"
+    echo "尝试以服务用户身份执行:"
+    sudo -u "$DEPLOY_USER" "$NODE_CMD" --version || true
+    echo "检查文件权限:"
+    ls -l "$NODE_CMD" || true
+fi
+
+# Test if server.js can be accessed
+if sudo -u "$DEPLOY_USER" test -f "$SERVER_SCRIPT"; then
+    echo "✓ 服务用户可以访问 server.js"
+else
+    echo "✗ 警告: 服务用户无法访问 server.js"
+    ls -l "$SERVER_SCRIPT" || true
+fi
 
 # Start the service
 echo "启动服务..."
