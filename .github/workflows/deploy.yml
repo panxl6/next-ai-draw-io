@@ -49,17 +49,49 @@ jobs:
         fi
         # Copy standalone build output (preserve directory structure)
         echo "📦 复制 standalone 构建文件"
+        echo "检查源文件:"
+        ls -la .next/ | head -10
+        echo ""
+        echo "检查 standalone 目录:"
+        ls -la .next/standalone/ | head -10
+        echo ""
         mkdir -p deploy-package/.next
-        cp -r .next/standalone deploy-package/.next/
+        echo "复制 standalone 目录..."
+        cp -rv .next/standalone deploy-package/.next/ 2>&1 | head -20
+        echo ""
         mkdir -p deploy-package/.next/static
-        cp -r .next/static/* deploy-package/.next/static/ || true
+        echo "复制 static 目录..."
+        cp -rv .next/static/* deploy-package/.next/static/ 2>&1 | head -20 || true
+        echo ""
+        # Verify copy result
+        echo "验证复制结果:"
+        if [ ! -d "deploy-package/.next/standalone" ]; then
+          echo "❌ 错误: deploy-package/.next/standalone 目录复制失败"
+          exit 1
+        fi
+        if [ ! -f "deploy-package/.next/standalone/server.js" ]; then
+          echo "❌ 错误: deploy-package/.next/standalone/server.js 文件不存在"
+          exit 1
+        fi
+        echo "✅ standalone 文件复制成功"
+        echo "deploy-package/.next 目录内容:"
+        ls -la deploy-package/.next/
+        echo ""
+        echo "deploy-package/.next/standalone 目录内容（前10项）:"
+        ls -la deploy-package/.next/standalone/ | head -10
+        echo ""
         # Copy public assets
         cp -r public deploy-package/
         # Copy deployment scripts
         cp deploy.sh deploy-package/
         cp next-ai-draw-io.service deploy-package/
-        # Note: Do not copy .env files via GitHub Actions for security
-        # Add them directly on the server or use GitHub Secrets
+        # Copy environment file if exists
+        if [ -f ".env.production" ]; then
+          echo "📋 复制 .env.production 文件"
+          cp .env.production deploy-package/
+        else
+          echo "⚠️  警告: .env.production 文件不存在，将跳过复制"
+        fi
 
     - name: Validate deployment package
       run: |
@@ -93,6 +125,12 @@ jobs:
         # Check .next/static directory
         if [ ! -d "deploy-package/.next/static" ]; then
           echo "⚠️  警告: deploy-package/.next/static 目录不存在（可能为空）"
+        fi
+        # Check .env.production file (optional)
+        if [ -f "deploy-package/.env.production" ]; then
+          echo "✅ deploy-package/.env.production 文件存在"
+        else
+          echo "⚠️  警告: deploy-package/.env.production 文件不存在（可选）"
         fi
         # Display deployment package structure
         echo "✅ 部署包结构验证通过"
