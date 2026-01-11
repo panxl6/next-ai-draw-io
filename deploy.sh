@@ -10,7 +10,7 @@ DEPLOY_DIR="/tmp/deploy-next-ai-draw-io"
 APP_DIR="/opt/${APP_NAME}"
 BACKUP_DIR="/opt/${APP_NAME}-backup"
 SERVICE_NAME="${APP_NAME}.service"
-PORT=${PORT:-6001}
+PORT=${PORT:-6002}
 
 # Find Node.js executable
 NODE_CMD=$(which node || echo "/usr/bin/node")
@@ -94,7 +94,7 @@ const next = require('next')
 
 const dev = process.env.NODE_ENV !== 'production'
 const hostname = process.env.HOSTNAME || '0.0.0.0'
-const port = parseInt(process.env.PORT || '6001', 10)
+const port = parseInt(process.env.PORT || '6002', 10)
 
 const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
