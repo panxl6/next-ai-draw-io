@@ -12,8 +12,16 @@ BACKUP_DIR="/opt/${APP_NAME}-backup"
 SERVICE_NAME="${APP_NAME}.service"
 PORT=${PORT:-6002}
 
-# Find Node.js executable
-NODE_CMD=$(which node || echo "/usr/bin/node")
+# Find Node.js executable (check common locations)
+if command -v node &> /dev/null; then
+    NODE_CMD=$(which node)
+elif [ -f /usr/local/bin/node ]; then
+    NODE_CMD="/usr/local/bin/node"
+elif [ -f /usr/bin/node ]; then
+    NODE_CMD="/usr/bin/node"
+else
+    NODE_CMD="node"
+fi
 
 echo "======================================"
 echo "开始部署 ${APP_NAME}"
@@ -25,12 +33,25 @@ if [ ! -d "$DEPLOY_DIR" ]; then
     exit 1
 fi
 
-# Display Node.js version (assumes Node.js is already installed)
+# Display Node.js version and check compatibility
 if command -v node &> /dev/null; then
-    echo "Node.js 版本: $(node --version)"
+    NODE_VERSION=$(node --version)
+    echo "Node.js 版本: $NODE_VERSION"
     echo "npm 版本: $(npm --version || echo '未安装')"
+    echo "Node.js 路径: $(which node)"
+    
+    # Check Node.js version (should be 20+ or 24+)
+    NODE_MAJOR=$(echo "$NODE_VERSION" | sed 's/v\([0-9]*\).*/\1/')
+    if [ "$NODE_MAJOR" -lt 20 ]; then
+        echo "⚠️  警告: Node.js 版本 $NODE_VERSION 可能不兼容"
+        echo "   推荐使用 Node.js 20+ 或 24+"
+        echo "   请参考 docs/SERVER_NODEJS_SETUP.md 升级 Node.js"
+    fi
 else
-    echo "警告: 未找到 Node.js 命令，请确保 Node.js 已正确安装"
+    echo "❌ 错误: 未找到 Node.js 命令"
+    echo "   请安装 Node.js 20+ 或 24+"
+    echo "   参考: docs/SERVER_NODEJS_SETUP.md"
+    exit 1
 fi
 
 # Create application directory if it doesn't exist
@@ -81,8 +102,9 @@ else
     cd "$APP_DIR"
     
     # Install production dependencies (only production packages)
+    # Skip prepare script to avoid husky installation error (husky is devDependency)
     echo "安装生产依赖..."
-    npm ci --omit=dev --production
+    npm ci --omit=dev --ignore-scripts
     
     # Use root server.js if exists, otherwise create one
     if [ ! -f "$APP_DIR/server.js" ]; then

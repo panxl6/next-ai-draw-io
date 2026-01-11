@@ -14,11 +14,35 @@
 
 ### 服务器准备
 
-1. **验证 Node.js 环境** (确保已安装):
+1. **安装 Node.js 环境** (必须 Node.js 20+ 或 24+):
+   
+   使用 nvm 安装（推荐）:
    ```bash
-   node --version  # 应该显示 v18.x.x 或 v24.x.x
-   npm --version   # 应该显示版本号
+   # 安装 nvm
+   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+   source ~/.bashrc
+   
+   # 安装 Node.js 20 LTS
+   nvm install 20
+   nvm use 20
+   nvm alias default 20
+   
+   # 设置为系统级可用（systemd 服务需要）
+   NVM_NODE=$(nvm which node)
+   NVM_DIR=$(dirname "$NVM_NODE")
+   NVM_NPM="$NVM_DIR/npm"
+   sudo ln -sf "$NVM_NODE" /usr/local/bin/node
+   sudo ln -sf "$NVM_NPM" /usr/local/bin/npm
    ```
+   
+   验证安装:
+   ```bash
+   node --version  # 应该显示 v20.x.x 或 v24.x.x
+   npm --version   # 应该显示版本号
+   which node      # 应该显示 /usr/local/bin/node
+   ```
+   
+   📖 详细说明请参考: [服务器 Node.js 安装配置指南](./SERVER_NODEJS_SETUP.md)
 
 2. **创建应用目录**:
    ```bash
