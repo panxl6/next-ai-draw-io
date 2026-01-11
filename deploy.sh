@@ -79,9 +79,31 @@ sudo cp -r "$DEPLOY_DIR"/* "$APP_DIR/"
 DEPLOY_USER=$(whoami)
 sudo chown -R $DEPLOY_USER:$DEPLOY_USER "$APP_DIR"
 
-# Check if this is a standalone build (has standalone directory)
-if [ -d "$APP_DIR/.next/standalone" ]; then
-    echo "检测到 standalone 构建模式"
+# Check if this is a standalone build
+# Standalone mode can be in two forms:
+# 1. .next/standalone/ directory (preserved structure)
+# 2. .next/ directory with server.js (unpacked standalone)
+if [ -f "$APP_DIR/.next/server.js" ]; then
+    echo "检测到 standalone 构建模式（展开格式）"
+    # Standalone content was unpacked to .next/
+    cd "$APP_DIR/.next"
+    
+    # In standalone mode, public and static should be linked from parent directory
+    # Create symlinks for public and .next/static if needed
+    if [ -d "$APP_DIR/public" ] && [ ! -e "./public" ]; then
+        ln -sf "$APP_DIR/public" ./public || true
+    fi
+    # Static files should be at .next/static (sibling to standalone content)
+    # In unpacked mode, static is already at .next/static, so create symlink inside .next
+    if [ -d "$APP_DIR/.next/static" ] && [ ! -d "./.next/static" ]; then
+        mkdir -p .next
+        ln -sf "$APP_DIR/.next/static" ./.next/static || true
+    fi
+    
+    SERVER_SCRIPT="$APP_DIR/.next/server.js"
+    echo "服务器脚本路径: $SERVER_SCRIPT"
+elif [ -d "$APP_DIR/.next/standalone" ] && [ -f "$APP_DIR/.next/standalone/server.js" ]; then
+    echo "检测到 standalone 构建模式（目录格式）"
     # For standalone mode, the server.js is in .next/standalone
     cd "$APP_DIR/.next/standalone"
     
@@ -148,18 +170,55 @@ if [ -f "$APP_DIR/.env.production" ]; then
     mv "$APP_DIR/.env.production" "$APP_DIR/.env.local" || true
 fi
 
+# Verify server script exists
+if [ ! -f "$SERVER_SCRIPT" ]; then
+    echo "错误: 服务器脚本不存在: $SERVER_SCRIPT"
+    exit 1
+fi
+
+# Verify node command exists and is executable
+if [ ! -f "$NODE_CMD" ] && ! command -v "$NODE_CMD" &> /dev/null; then
+    echo "错误: Node.js 命令不存在: $NODE_CMD"
+    echo "请确保 Node.js 已正确安装"
+    exit 1
+fi
+
 # Update service file with correct paths
 echo "配置 systemd 服务..."
+echo "服务器脚本: $SERVER_SCRIPT"
+echo "Node.js 命令: $NODE_CMD"
 # Get the directory of the server script
 SERVER_DIR=$(dirname "$SERVER_SCRIPT")
-sudo sed -i "s|ExecStart=.*|ExecStart=$NODE_CMD $SERVER_SCRIPT|" "$APP_DIR/$SERVICE_NAME"
-sudo sed -i "s|WorkingDirectory=.*|WorkingDirectory=$SERVER_DIR|" "$APP_DIR/$SERVICE_NAME"
+echo "工作目录: $SERVER_DIR"
+
+# Create a temporary service file with correct paths
+TEMP_SERVICE=$(mktemp)
+cp "$APP_DIR/$SERVICE_NAME" "$TEMP_SERVICE"
+
+# Update paths using sed (no sudo needed for temp file)
+sed -i "s|^ExecStart=.*|ExecStart=$NODE_CMD $SERVER_SCRIPT|" "$TEMP_SERVICE"
+sed -i "s|^WorkingDirectory=.*|WorkingDirectory=$SERVER_DIR|" "$TEMP_SERVICE"
+
 # Update User to match deploy user if needed
 DEPLOY_USER=$(whoami)
-sudo sed -i "s|^User=.*|User=$DEPLOY_USER|" "$APP_DIR/$SERVICE_NAME"
-sudo sed -i "s|^Group=.*|Group=$DEPLOY_USER|" "$APP_DIR/$SERVICE_NAME"
+sed -i "s|^User=.*|User=$DEPLOY_USER|" "$TEMP_SERVICE"
+sed -i "s|^Group=.*|Group=$DEPLOY_USER|" "$TEMP_SERVICE"
 
-sudo cp "$APP_DIR/$SERVICE_NAME" /etc/systemd/system/
+# Verify the service file
+echo "验证服务文件配置..."
+if ! grep -q "^ExecStart=$NODE_CMD $SERVER_SCRIPT" "$TEMP_SERVICE"; then
+    echo "警告: ExecStart 可能未正确更新，检查服务文件..."
+    grep "^ExecStart=" "$TEMP_SERVICE" || echo "未找到 ExecStart 行"
+else
+    echo "ExecStart 已正确配置:"
+    grep "^ExecStart=" "$TEMP_SERVICE"
+fi
+
+# Copy to systemd directory
+sudo cp "$TEMP_SERVICE" /etc/systemd/system/$SERVICE_NAME
+sudo chmod 644 /etc/systemd/system/$SERVICE_NAME
+rm -f "$TEMP_SERVICE"
+
 sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
 
