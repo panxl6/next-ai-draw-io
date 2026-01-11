@@ -183,6 +183,22 @@ if [ ! -f "$NODE_CMD" ] && ! command -v "$NODE_CMD" &> /dev/null; then
     exit 1
 fi
 
+# Resolve symlink to actual path (important for nvm installations)
+if [ -L "$NODE_CMD" ]; then
+    echo "检测到 Node.js 符号链接，解析实际路径..."
+    NODE_ACTUAL=$(readlink -f "$NODE_CMD")
+    echo "符号链接: $NODE_CMD -> $NODE_ACTUAL"
+    
+    # Check if the actual path is in user home directory (nvm installation)
+    if [[ "$NODE_ACTUAL" == /home/* ]]; then
+        echo "警告: Node.js 位于用户主目录（可能是 nvm 安装）"
+        echo "实际路径: $NODE_ACTUAL"
+        # Use the actual path instead of symlink
+        NODE_CMD="$NODE_ACTUAL"
+        echo "使用实际路径: $NODE_CMD"
+    fi
+fi
+
 # Verify node is executable
 if [ -f "$NODE_CMD" ] && [ ! -x "$NODE_CMD" ]; then
     echo "警告: Node.js 文件不可执行，尝试添加执行权限..."
@@ -218,11 +234,19 @@ sed -i "s|^User=.*|User=$DEPLOY_USER|" "$TEMP_SERVICE"
 sed -i "s|^Group=.*|Group=$DEPLOY_USER|" "$TEMP_SERVICE"
 
 # Fix systemd security settings to allow Node.js execution
-# ProtectSystem=strict blocks /usr (read-only mount), preventing execution of /usr/local/bin/node
 NODE_DIR=$(dirname "$NODE_CMD")
 echo "Node.js 目录: $NODE_DIR"
-# If Node.js is in /usr/local/bin or /usr/bin, we need to adjust security settings
-if [[ "$NODE_DIR" == "/usr/local/bin" ]] || [[ "$NODE_DIR" == "/usr/bin" ]]; then
+
+# Check if Node.js is in user home directory (nvm installation)
+if [[ "$NODE_DIR" == /home/* ]]; then
+    echo "检测到 Node.js 在用户主目录，需要调整 systemd 安全设置..."
+    # Remove ProtectHome to allow access to user home directory
+    sed -i "/^ProtectHome=/d" "$TEMP_SERVICE"
+    echo "已移除 ProtectHome 限制（允许访问用户主目录）"
+    # Also remove ProtectSystem if present
+    sed -i "/^ProtectSystem=/d" "$TEMP_SERVICE"
+    echo "已移除 ProtectSystem 限制"
+elif [[ "$NODE_DIR" == "/usr/local/bin" ]] || [[ "$NODE_DIR" == "/usr/bin" ]]; then
     echo "调整 systemd 安全设置以允许执行 Node.js..."
     # Completely remove ProtectSystem to allow execution
     # This is necessary because ProtectSystem=strict/true can block execution
