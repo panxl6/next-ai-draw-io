@@ -58,6 +58,17 @@ jobs:
         # Copy deployment scripts
         cp deploy.sh deploy-package/
         cp next-ai-draw-io.service deploy-package/
+        # Verify deployment package structure
+        echo "验证部署包结构:"
+        ls -la deploy-package/
+        if [ -d "deploy-package/.next" ]; then
+          echo ".next 目录内容:"
+          ls -la deploy-package/.next/
+          if [ -d "deploy-package/.next/standalone" ]; then
+            echo ".next/standalone 目录内容:"
+            ls -la deploy-package/.next/standalone/ | head -10
+          fi
+        fi
         # Note: Do not copy .env files via GitHub Actions for security
         # Add them directly on the server or use GitHub Secrets
 
@@ -74,6 +85,34 @@ jobs:
         timeout: 30s
         command_timeout: 10m
         debug: true
+
+    - name: Verify deployment files
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: ${{ secrets.SERVER_PORT || 22 }}
+        timeout: 30s
+        command_timeout: 10m
+        debug: true
+        script: |
+          echo "检查部署文件:"
+          ls -la /tmp/deploy-next-ai-draw-io/
+          if [ -d "/tmp/deploy-next-ai-draw-io/.next" ]; then
+            echo ".next 目录存在:"
+            ls -la /tmp/deploy-next-ai-draw-io/.next/
+            if [ -d "/tmp/deploy-next-ai-draw-io/.next/standalone" ]; then
+              echo ".next/standalone 目录存在:"
+              ls -la /tmp/deploy-next-ai-draw-io/.next/standalone/ | head -10
+            else
+              echo "错误: .next/standalone 目录不存在"
+              exit 1
+            fi
+          else
+            echo "错误: .next 目录不存在"
+            exit 1
+          fi
 
     - name: Execute deployment script
       uses: appleboy/ssh-action@v1.0.3

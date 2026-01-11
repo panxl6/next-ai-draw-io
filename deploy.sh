@@ -32,6 +32,20 @@ if [ ! -d "$DEPLOY_DIR" ]; then
     exit 1
 fi
 
+# Verify deployment directory structure
+echo "验证部署目录内容..."
+ls -la "$DEPLOY_DIR"
+if [ ! -d "$DEPLOY_DIR/.next" ]; then
+    echo "错误: 部署目录中缺少 .next 目录"
+    echo "请检查 GitHub Actions 工作流是否正确复制了构建文件"
+    exit 1
+fi
+if [ ! -d "$DEPLOY_DIR/.next/standalone" ]; then
+    echo "错误: 部署目录中缺少 .next/standalone 目录"
+    echo "请确保使用 standalone 模式构建"
+    exit 1
+fi
+
 # Display Node.js version and check compatibility
 if command -v node &> /dev/null; then
     NODE_VERSION=$(node --version)
