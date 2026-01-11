@@ -115,7 +115,7 @@ jobs:
         username: ${{ secrets.SERVER_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: ${{ secrets.SERVER_PORT || 22 }}
-        source: "deploy-package/*"
+        source: "deploy-package"
         target: "/tmp/deploy-next-ai-draw-io"
         strip_components: 1
         timeout: 30s
