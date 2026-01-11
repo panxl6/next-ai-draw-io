@@ -69,6 +69,18 @@ sudo cp -r "$DEPLOY_DIR"/* "$APP_DIR/"
 DEPLOY_USER=$(whoami)
 sudo chown -R $DEPLOY_USER:$DEPLOY_USER "$APP_DIR"
 
+# Debug: List directory structure
+echo "检查部署文件结构..."
+ls -la "$APP_DIR" || true
+if [ -d "$APP_DIR/.next" ]; then
+    echo ".next 目录内容:"
+    ls -la "$APP_DIR/.next" || true
+    if [ -d "$APP_DIR/.next/standalone" ]; then
+        echo ".next/standalone 目录内容:"
+        ls -la "$APP_DIR/.next/standalone" | head -20 || true
+    fi
+fi
+
 # Standalone build mode
 # Check for standalone build in .next/standalone directory
 if [ -d "$APP_DIR/.next/standalone" ] && [ -f "$APP_DIR/.next/standalone/server.js" ]; then

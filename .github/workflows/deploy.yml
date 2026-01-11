@@ -47,8 +47,9 @@ jobs:
           echo "请确保 next.config.ts 中设置了 output: 'standalone'"
           exit 1
         fi
-        # Copy standalone build output
+        # Copy standalone build output (preserve directory structure)
         echo "复制 standalone 构建文件"
+        mkdir -p deploy-package/.next
         cp -r .next/standalone deploy-package/.next/
         mkdir -p deploy-package/.next/static
         cp -r .next/static/* deploy-package/.next/static/ || true
