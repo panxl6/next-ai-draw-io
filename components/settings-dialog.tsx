@@ -53,7 +53,6 @@ function SettingItem({
 const LANGUAGE_LABELS: Record<Locale, string> = {
     en: "English",
     zh: "中文",
-    ja: "日本語",
 }
 
 interface SettingsDialogProps {
@@ -428,7 +427,7 @@ function SettingsContent({
                         <>
                             <span className="text-muted-foreground">·</span>
                             <a
-                                href={`/${currentLang}/about${currentLang === "zh" ? "/cn" : currentLang === "ja" ? "/ja" : ""}`}
+                                href={`/${currentLang}/about${currentLang === "zh" ? "/cn" : ""}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"

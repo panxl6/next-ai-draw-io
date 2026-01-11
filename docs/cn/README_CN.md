@@ -4,7 +4,7 @@
 
 **AI驱动的图表创建工具 - 对话、绘制、可视化**
 
-[English](../../README.md) | 中文 | [日本語](../ja/README_JA.md)
+[English](../../README.md) | 中文
 
 [![TrendShift](https://trendshift.io/api/badge/repositories/15449)](https://next-ai-drawio.jiang.jp/)
 

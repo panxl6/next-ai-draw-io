@@ -41,19 +41,17 @@ export async function generateMetadata({
     params: Promise<{ lang: string }>
 }): Promise<Metadata> {
     const { lang: rawLang } = await params
-    const lang = (rawLang in { en: 1, zh: 1, ja: 1 } ? rawLang : "en") as Locale
+    const lang = (rawLang in { en: 1, zh: 1 } ? rawLang : "en") as Locale
 
     // Default to English metadata
     const titles: Record<Locale, string> = {
         en: "Next AI Draw.io - AI-Powered Diagram Generator",
         zh: "Next AI Draw.io - AI powered diagram generator",
-        ja: "Next AI Draw.io - AI-powered diagram generator",
     }
 
     const descriptions: Record<Locale, string> = {
         en: "Create AWS architecture diagrams, flowcharts, and technical diagrams using AI. Free online tool integrating draw.io with AI assistance for professional diagram creation.",
         zh: "Use AI to create AWS architecture diagrams, flowcharts, and technical diagrams. Free online tool integrated with draw.io and AI assistance for professional diagram creation.",
-        ja: "Create AWS architecture diagrams, flowcharts, and technical diagrams using AI. Create professional diagrams with a free online tool that integrates draw.io with an AI assistant.",
     }
 
     return {
@@ -80,7 +78,7 @@ export async function generateMetadata({
             type: "website",
             url: "https://next-ai-drawio.jiang.jp",
             siteName: "Next AI Draw.io",
-            locale: lang === "zh" ? "zh_CN" : lang === "ja" ? "ja_JP" : "en_US",
+            locale: lang === "zh" ? "zh_CN" : "en_US",
             images: [
                 {
                     url: "/architecture.png",
@@ -114,7 +112,6 @@ export async function generateMetadata({
             languages: {
                 en: "/en",
                 zh: "/zh",
-                ja: "/ja",
             },
         },
     }
