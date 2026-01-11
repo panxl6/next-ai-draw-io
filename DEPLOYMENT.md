@@ -28,7 +28,7 @@
 
 3. **配置防火墙** (可选):
    ```bash
-   sudo ufw allow 6001/tcp  # 如果使用默认端口 6001
+   sudo ufw allow 6002/tcp  # 如果使用默认端口 6002
    ```
 
 ## GitHub Secrets 配置
@@ -67,7 +67,7 @@ sudo nano /opt/next-ai-draw-io/.env.local
 
 ```env
 NODE_ENV=production
-PORT=6001
+PORT=6002
 # 添加其他必要的环境变量
 ```
 
@@ -175,7 +175,7 @@ sudo systemctl disable next-ai-draw-io.service
 
 1. **检查端口占用**:
    ```bash
-   sudo netstat -tlnp | grep 6001
+   sudo netstat -tlnp | grep 6002
    ```
 
 3. **检查环境变量**:
@@ -203,26 +203,62 @@ sudo systemctl start next-ai-draw-io.service
 5. **日志监控**: 定期检查应用日志，监控异常情况
 6. **备份策略**: 定期备份应用数据和配置
 
-## 生产环境优化
+## 生产环境优化（必需）
 
-1. **使用反向代理** (Nginx):
+**⚠️ 安全要求：生产环境必须使用 HTTPS**
+
+应用在生产环境中会强制所有 HTTP 请求重定向到 HTTPS。您必须配置 HTTPS 反向代理（推荐使用 Nginx）。
+
+1. **配置 Nginx 反向代理和 HTTPS**（必需）:
    ```nginx
+   # HTTP to HTTPS redirect
    server {
        listen 80;
        server_name your-domain.com;
+       return 301 https://$server_name$request_uri;
+   }
+
+   # HTTPS server
+   server {
+       listen 443 ssl http2;
+       server_name your-domain.com;
+
+       # SSL certificate configuration (使用 Let's Encrypt)
+       ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+       ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+       
+       # SSL configuration for security
+       ssl_protocols TLSv1.2 TLSv1.3;
+       ssl_ciphers HIGH:!aNULL:!MD5;
+       ssl_prefer_server_ciphers on;
 
        location / {
-           proxy_pass http://localhost:6001;
+           proxy_pass http://localhost:6002;
            proxy_http_version 1.1;
            proxy_set_header Upgrade $http_upgrade;
            proxy_set_header Connection 'upgrade';
            proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
            proxy_cache_bypass $http_upgrade;
        }
    }
    ```
 
-2. **配置 HTTPS**: 使用 Let's Encrypt 配置 SSL 证书
+2. **使用 Let's Encrypt 配置 SSL 证书**:
+   ```bash
+   sudo apt install certbot python3-certbot-nginx -y
+   sudo certbot --nginx -d your-domain.com
+   ```
+
+3. **配置防火墙**（只开放 HTTPS 端口）:
+   ```bash
+   sudo ufw allow 80/tcp   # 仅用于 Let's Encrypt 验证和重定向
+   sudo ufw allow 443/tcp  # HTTPS
+   sudo ufw allow 6002/tcp from 127.0.0.1  # 仅允许本地访问应用端口
+   sudo ufw reload
+   ```
 
 3. **进程管理**: 使用 PM2 替代 systemd（可选）
 

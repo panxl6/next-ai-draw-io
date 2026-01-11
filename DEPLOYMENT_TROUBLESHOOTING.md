@@ -6,14 +6,11 @@
 
 #### 问题分析
 
-**端口不匹配问题**：
-- 当前服务配置的端口是 `6001`
-- 您尝试访问的端口是 `6002`
-- 请使用 `http://43.128.81.143:6001` 访问（注意是 HTTP，不是 HTTPS）
-
-**HTTPS 问题**：
-- Next.js 服务默认运行在 HTTP
-- 要使用 HTTPS，需要配置 Nginx 反向代理
+**HTTPS 强制要求**：
+- ⚠️ **生产环境必须使用 HTTPS**
+- 应用在生产环境中会强制所有 HTTP 请求重定向到 HTTPS
+- 必须配置 Nginx 反向代理来处理 HTTPS 请求
+- 不能直接使用 HTTP 访问应用端口（6002）
 
 #### 解决方案
 
@@ -36,8 +33,10 @@
    sudo ss -tlnp | grep node
    ```
 
-4. 使用正确的 URL 访问：
-   - HTTP: `http://43.128.81.143:6001` （注意是 HTTP，端口 6001）
+4. **不能直接访问应用端口**：
+   - ⚠️ 应用在生产环境强制使用 HTTPS
+   - 必须通过 Nginx 反向代理使用 HTTPS 访问
+   - 直接访问 `http://43.128.81.143:6002` 会被重定向到 HTTPS
 
 **方案 B：配置 HTTPS 和 Nginx 反向代理（推荐）**
 
@@ -66,7 +65,7 @@
        server_name your-domain.com;
        
        location / {
-           proxy_pass http://127.0.0.1:6001;
+           proxy_pass http://127.0.0.1:6002;
            proxy_http_version 1.1;
            proxy_set_header Upgrade $http_upgrade;
            proxy_set_header Connection 'upgrade';
@@ -89,7 +88,7 @@
        ssl_certificate_key /path/to/key.pem;
        
        location / {
-           proxy_pass http://127.0.0.1:6001;
+           proxy_pass http://127.0.0.1:6002;
            proxy_http_version 1.1;
            proxy_set_header Upgrade $http_upgrade;
            proxy_set_header Connection 'upgrade';
@@ -119,7 +118,7 @@
    ```bash
    sudo ufw allow 80/tcp
    sudo ufw allow 443/tcp
-   sudo ufw allow 6001/tcp  # 仅允许本地访问
+   sudo ufw allow 6002/tcp  # 仅允许本地访问
    ```
 
 **方案 C：修改服务端口为 6002**
@@ -163,9 +162,9 @@
 
 5. **检查端口是否被占用**：
    ```bash
-   sudo lsof -i :6001
+   sudo lsof -i :6002
    # 或
-   sudo netstat -tlnp | grep 6001
+   sudo netstat -tlnp | grep 6002
    ```
 
 ### 3. 防火墙问题
@@ -175,9 +174,9 @@
 sudo ufw status
 ```
 
-开放端口（如果使用 6001）：
+开放端口（如果使用 6002）：
 ```bash
-sudo ufw allow 6001/tcp
+sudo ufw allow 6002/tcp
 sudo ufw reload
 ```
 
@@ -198,7 +197,7 @@ echo "=== 服务状态 ==="
 sudo systemctl status next-ai-draw-io.service --no-pager -l | head -20
 
 echo -e "\n=== 端口监听 ==="
-sudo netstat -tlnp | grep -E "6001|6002" || echo "端口未监听"
+sudo netstat -tlnp | grep 6002 || echo "端口未监听"
 
 echo -e "\n=== 进程状态 ==="
 ps aux | grep -E "node.*server.js" | grep -v grep || echo "进程未运行"

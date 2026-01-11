@@ -9,14 +9,12 @@ export default defineConfig({
     reporter: process.env.CI ? [["list"], ["html"]] : "html",
     webServer: {
         command: process.env.CI ? "npm run start" : "npm run dev",
-        port: process.env.CI ? 6001 : 6002,
+        port: 6002,
         reuseExistingServer: !process.env.CI,
         timeout: 120 * 1000,
     },
     use: {
-        baseURL: process.env.CI
-            ? "http://localhost:6001"
-            : "http://localhost:6002",
+        baseURL: "http://localhost:6002",
         trace: "on-first-retry",
     },
     projects: [

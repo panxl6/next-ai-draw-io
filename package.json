@@ -9,7 +9,7 @@
         "dev:http": "next dev --turbopack --port 6002",
         "generate-cert": "node scripts/generate-ssl-cert.js",
         "build": "next build",
-        "start": "next start --port 6001",
+        "start": "next start --port 6002",
         "lint": "biome lint .",
         "format": "biome check --write .",
         "check": "biome ci",

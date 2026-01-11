@@ -59,16 +59,32 @@ export function proxy(request: NextRequest) {
         return
     }
 
-    // Force HTTPS redirect in production or when HTTPS is enabled
-    // Check if request is HTTP and should be redirected to HTTPS
+    // Force HTTPS redirect - Security: Only allow HTTPS in production
+    // In production, all HTTP requests must be redirected to HTTPS
     if (
-        (process.env.NODE_ENV === "production" ||
-            process.env.FORCE_HTTPS === "true") &&
-        request.headers.get("x-forwarded-proto") === "http" &&
-        request.url.startsWith("http://")
+        process.env.NODE_ENV === "production" ||
+        process.env.FORCE_HTTPS === "true"
     ) {
-        const httpsUrl = request.url.replace("http://", "https://")
-        return NextResponse.redirect(httpsUrl, 301)
+        const protocol =
+            request.headers.get("x-forwarded-proto") ||
+            (request.url.startsWith("https://") ? "https" : "http")
+
+        // If request is HTTP, redirect to HTTPS
+        if (protocol === "http" || request.url.startsWith("http://")) {
+            try {
+                const url = new URL(request.url)
+                url.protocol = "https"
+                // If using standard HTTPS port, remove port number for cleaner URLs
+                if (url.port === "443") {
+                    url.port = ""
+                }
+                return NextResponse.redirect(url.toString(), 301)
+            } catch {
+                // If URL parsing fails, construct HTTPS URL
+                const httpsUrl = request.url.replace("http://", "https://")
+                return NextResponse.redirect(httpsUrl, 301)
+            }
+        }
     }
 
     // Check authentication for protected routes

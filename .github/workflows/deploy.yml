@@ -6,6 +6,13 @@ on:
       - main  # 当推送到 main 分支时触发部署
   workflow_dispatch:  # 允许手动触发
 
+# 并发控制：确保一次提交只部署一次
+# 使用 github.ref 确保同一分支的多个提交不会同时部署
+# cancel-in-progress: true 表示如果新的提交触发部署，会取消正在进行的旧部署
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
