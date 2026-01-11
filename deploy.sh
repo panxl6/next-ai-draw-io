@@ -208,7 +208,8 @@ TEMP_SERVICE=$(mktemp)
 cp "$APP_DIR/$SERVICE_NAME" "$TEMP_SERVICE"
 
 # Update paths using sed (no sudo needed for temp file)
-sed -i "s|^ExecStart=.*|ExecStart=$NODE_CMD $SERVER_SCRIPT|" "$TEMP_SERVICE"
+# Use /bin/sh -c to ensure proper execution environment
+sed -i "s|^ExecStart=.*|ExecStart=/bin/sh -c \"$NODE_CMD $SERVER_SCRIPT\"|" "$TEMP_SERVICE"
 sed -i "s|^WorkingDirectory=.*|WorkingDirectory=$SERVER_DIR|" "$TEMP_SERVICE"
 
 # Update User to match deploy user if needed
@@ -227,18 +228,44 @@ if [[ "$NODE_DIR" == "/usr/local/bin" ]] || [[ "$NODE_DIR" == "/usr/bin" ]]; the
     # This is necessary because ProtectSystem=strict/true can block execution
     sed -i "/^ProtectSystem=/d" "$TEMP_SERVICE"
     echo "已移除 ProtectSystem 限制"
-    
-    # Also ensure PATH is set for the service user
-    if ! grep -q "^Environment=PATH=" "$TEMP_SERVICE"; then
-        # Add PATH environment variable after existing Environment lines
-        sed -i "/^Environment=.*/a Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" "$TEMP_SERVICE"
+fi
+
+# Ensure PATH is set for the service user (only once, before ExecStart)
+if ! grep -q "^Environment=PATH=" "$TEMP_SERVICE"; then
+    # Find the last Environment line and add PATH after it
+    LAST_ENV_LINE=$(grep -n "^Environment=" "$TEMP_SERVICE" | tail -1 | cut -d: -f1)
+    if [ -n "$LAST_ENV_LINE" ]; then
+        sed -i "${LAST_ENV_LINE}a Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" "$TEMP_SERVICE"
         echo "已添加 PATH 环境变量"
+    else
+        # If no Environment line exists, add before ExecStart
+        sed -i "/^ExecStart=/i Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" "$TEMP_SERVICE"
+        echo "已添加 PATH 环境变量（在 ExecStart 之前）"
     fi
+fi
+
+# Remove duplicate PATH entries - keep only the first one
+PATH_COUNT=$(grep -c "^Environment=PATH=" "$TEMP_SERVICE" || echo "0")
+if [ "$PATH_COUNT" -gt 1 ]; then
+    echo "发现重复的 PATH 环境变量，正在清理..."
+    # Keep only the first PATH entry, remove the rest
+    FIRST_PATH_LINE=$(grep -n "^Environment=PATH=" "$TEMP_SERVICE" | head -1 | cut -d: -f1)
+    # Remove all PATH lines
+    sed -i '/^Environment=PATH=/d' "$TEMP_SERVICE"
+    # Re-add only one PATH line after the last Environment line
+    LAST_ENV_LINE=$(grep -n "^Environment=" "$TEMP_SERVICE" | tail -1 | cut -d: -f1)
+    if [ -n "$LAST_ENV_LINE" ]; then
+        sed -i "${LAST_ENV_LINE}a Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" "$TEMP_SERVICE"
+    else
+        sed -i "/^ExecStart=/i Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" "$TEMP_SERVICE"
+    fi
+    echo "已清理重复的 PATH 环境变量"
 fi
 
 # Verify the service file
 echo "验证服务文件配置..."
-if ! grep -q "^ExecStart=$NODE_CMD $SERVER_SCRIPT" "$TEMP_SERVICE"; then
+# Check if ExecStart contains the node command (with shell wrapper)
+if ! grep -q "ExecStart=.*$NODE_CMD.*$SERVER_SCRIPT" "$TEMP_SERVICE"; then
     echo "警告: ExecStart 可能未正确更新，检查服务文件..."
     grep "^ExecStart=" "$TEMP_SERVICE" || echo "未找到 ExecStart 行"
 else
