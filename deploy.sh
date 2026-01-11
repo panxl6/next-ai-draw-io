@@ -8,7 +8,6 @@ set -e  # Exit on error
 APP_NAME="next-ai-draw-io"
 DEPLOY_DIR="/tmp/deploy-next-ai-draw-io"
 APP_DIR="/opt/${APP_NAME}"
-BACKUP_DIR="/opt/${APP_NAME}-backup"
 SERVICE_NAME="${APP_NAME}.service"
 PORT=${PORT:-6002}
 
@@ -56,15 +55,6 @@ fi
 
 # Create application directory if it doesn't exist
 sudo mkdir -p "$APP_DIR"
-sudo mkdir -p "$BACKUP_DIR"
-
-# Backup current deployment if it exists
-if [ -d "$APP_DIR/.next" ] || [ -f "$APP_DIR/server.js" ]; then
-    echo "备份当前部署..."
-    sudo rm -rf "$BACKUP_DIR"/*
-    sudo cp -r "$APP_DIR"/* "$BACKUP_DIR/" 2>/dev/null || true
-    echo "备份完成"
-fi
 
 # Stop the service if it's running
 echo "停止服务..."
@@ -79,32 +69,10 @@ sudo cp -r "$DEPLOY_DIR"/* "$APP_DIR/"
 DEPLOY_USER=$(whoami)
 sudo chown -R $DEPLOY_USER:$DEPLOY_USER "$APP_DIR"
 
-# Check if this is a standalone build
-# Standalone mode can be in two forms:
-# 1. .next/standalone/ directory (preserved structure)
-# 2. .next/ directory with server.js (unpacked standalone)
-if [ -f "$APP_DIR/.next/server.js" ]; then
-    echo "检测到 standalone 构建模式（展开格式）"
-    # Standalone content was unpacked to .next/
-    cd "$APP_DIR/.next"
-    
-    # In standalone mode, public and static should be linked from parent directory
-    # Create symlinks for public and .next/static if needed
-    if [ -d "$APP_DIR/public" ] && [ ! -e "./public" ]; then
-        ln -sf "$APP_DIR/public" ./public || true
-    fi
-    # Static files should be at .next/static (sibling to standalone content)
-    # In unpacked mode, static is already at .next/static, so create symlink inside .next
-    if [ -d "$APP_DIR/.next/static" ] && [ ! -d "./.next/static" ]; then
-        mkdir -p .next
-        ln -sf "$APP_DIR/.next/static" ./.next/static || true
-    fi
-    
-    SERVER_SCRIPT="$APP_DIR/.next/server.js"
-    echo "服务器脚本路径: $SERVER_SCRIPT"
-elif [ -d "$APP_DIR/.next/standalone" ] && [ -f "$APP_DIR/.next/standalone/server.js" ]; then
-    echo "检测到 standalone 构建模式（目录格式）"
-    # For standalone mode, the server.js is in .next/standalone
+# Standalone build mode
+# Check for standalone build in .next/standalone directory
+if [ -d "$APP_DIR/.next/standalone" ] && [ -f "$APP_DIR/.next/standalone/server.js" ]; then
+    echo "检测到 standalone 构建模式"
     cd "$APP_DIR/.next/standalone"
     
     # Create symlinks for public and .next/static
@@ -116,52 +84,11 @@ elif [ -d "$APP_DIR/.next/standalone" ] && [ -f "$APP_DIR/.next/standalone/serve
         ln -sf "$APP_DIR/.next/static" ./.next/static || true
     fi
     
-    # Update service file to use standalone server.js
     SERVER_SCRIPT="$APP_DIR/.next/standalone/server.js"
 else
-    # Standard build mode
-    echo "使用标准构建模式"
-    cd "$APP_DIR"
-    
-    # Install production dependencies (only production packages)
-    # Skip prepare script to avoid husky installation error (husky is devDependency)
-    echo "安装生产依赖..."
-    npm ci --omit=dev --ignore-scripts
-    
-    # Use root server.js if exists, otherwise create one
-    if [ ! -f "$APP_DIR/server.js" ]; then
-        echo "创建 server.js..."
-        cat > "$APP_DIR/server.js" << 'EOF'
-const { createServer } = require('http')
-const { parse } = require('url')
-const next = require('next')
-
-const dev = process.env.NODE_ENV !== 'production'
-const hostname = process.env.HOSTNAME || '0.0.0.0'
-const port = parseInt(process.env.PORT || '6002', 10)
-
-const app = next({ dev, hostname, port })
-const handle = app.getRequestHandler()
-
-app.prepare().then(() => {
-    createServer(async (req, res) => {
-        try {
-            const parsedUrl = parse(req.url, true)
-            await handle(req, res, parsedUrl)
-        } catch (err) {
-            console.error('Error occurred handling', req.url, err)
-            res.statusCode = 500
-            res.end('internal server error')
-        }
-    }).listen(port, hostname, (err) => {
-        if (err) throw err
-        console.log(`> Ready on http://${hostname}:${port}`)
-    })
-})
-EOF
-    fi
-    
-    SERVER_SCRIPT="$APP_DIR/server.js"
+    echo "错误: 未找到 standalone 构建文件"
+    echo "请确保使用 standalone 模式构建 (next.config.ts 中设置 output: 'standalone')"
+    exit 1
 fi
 
 # Set up environment variables if .env.production exists
@@ -183,20 +110,13 @@ if [ ! -f "$NODE_CMD" ] && ! command -v "$NODE_CMD" &> /dev/null; then
     exit 1
 fi
 
-# Resolve symlink to actual path (important for nvm installations)
+# Resolve symlink to actual path
 if [ -L "$NODE_CMD" ]; then
     echo "检测到 Node.js 符号链接，解析实际路径..."
     NODE_ACTUAL=$(readlink -f "$NODE_CMD")
     echo "符号链接: $NODE_CMD -> $NODE_ACTUAL"
-    
-    # Check if the actual path is in user home directory (nvm installation)
-    if [[ "$NODE_ACTUAL" == /home/* ]]; then
-        echo "警告: Node.js 位于用户主目录（可能是 nvm 安装）"
-        echo "实际路径: $NODE_ACTUAL"
-        # Use the actual path instead of symlink
-        NODE_CMD="$NODE_ACTUAL"
-        echo "使用实际路径: $NODE_CMD"
-    fi
+    NODE_CMD="$NODE_ACTUAL"
+    echo "使用实际路径: $NODE_CMD"
 fi
 
 # Verify node is executable
@@ -237,16 +157,8 @@ sed -i "s|^Group=.*|Group=$DEPLOY_USER|" "$TEMP_SERVICE"
 NODE_DIR=$(dirname "$NODE_CMD")
 echo "Node.js 目录: $NODE_DIR"
 
-# Check if Node.js is in user home directory (nvm installation)
-if [[ "$NODE_DIR" == /home/* ]]; then
-    echo "检测到 Node.js 在用户主目录，需要调整 systemd 安全设置..."
-    # Remove ProtectHome to allow access to user home directory
-    sed -i "/^ProtectHome=/d" "$TEMP_SERVICE"
-    echo "已移除 ProtectHome 限制（允许访问用户主目录）"
-    # Also remove ProtectSystem if present
-    sed -i "/^ProtectSystem=/d" "$TEMP_SERVICE"
-    echo "已移除 ProtectSystem 限制"
-elif [[ "$NODE_DIR" == "/usr/local/bin" ]] || [[ "$NODE_DIR" == "/usr/bin" ]]; then
+# Adjust systemd security settings to allow Node.js execution
+if [[ "$NODE_DIR" == "/usr/local/bin" ]] || [[ "$NODE_DIR" == "/usr/bin" ]]; then
     echo "调整 systemd 安全设置以允许执行 Node.js..."
     # Completely remove ProtectSystem to allow execution
     # This is necessary because ProtectSystem=strict/true can block execution
@@ -355,13 +267,6 @@ else
     echo "======================================"
     echo "查看日志:"
     sudo journalctl -u "$SERVICE_NAME" --no-pager -l | tail -30
-    echo ""
-    echo "尝试恢复备份..."
-    if [ -d "$BACKUP_DIR/.next" ] || [ -f "$BACKUP_DIR/server.js" ]; then
-        sudo rm -rf "$APP_DIR"/*
-        sudo cp -r "$BACKUP_DIR"/* "$APP_DIR/" || true
-        sudo systemctl start "$SERVICE_NAME" || true
-    fi
     exit 1
 fi
 

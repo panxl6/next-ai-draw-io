@@ -41,27 +41,22 @@ jobs:
     - name: Prepare deployment files
       run: |
         mkdir -p deploy-package
-        # Copy build output (standalone mode includes necessary files)
-        if [ -d ".next/standalone" ]; then
-          echo "Standalone build detected"
-          cp -r .next/standalone deploy-package/.next/
-          mkdir -p deploy-package/.next/static
-          cp -r .next/static/* deploy-package/.next/static/ || true
-        else
-          echo "Standard build - copying full .next directory"
-          cp -r .next deploy-package/
+        # Verify standalone build exists
+        if [ ! -d ".next/standalone" ]; then
+          echo "错误: 未找到 standalone 构建文件"
+          echo "请确保 next.config.ts 中设置了 output: 'standalone'"
+          exit 1
         fi
+        # Copy standalone build output
+        echo "复制 standalone 构建文件"
+        cp -r .next/standalone deploy-package/.next/
+        mkdir -p deploy-package/.next/static
+        cp -r .next/static/* deploy-package/.next/static/ || true
         # Copy public assets
         cp -r public deploy-package/
-        # Copy necessary config files
-        cp package.json deploy-package/
-        cp package-lock.json deploy-package/ || true
-        cp next.config.ts deploy-package/
         # Copy deployment scripts
         cp deploy.sh deploy-package/
         cp next-ai-draw-io.service deploy-package/
-        # Copy server.js if exists (for non-standalone mode)
-        [ -f server.js ] && cp server.js deploy-package/ || true
         # Note: Do not copy .env files via GitHub Actions for security
         # Add them directly on the server or use GitHub Secrets
 
