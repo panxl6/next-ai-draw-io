@@ -43,12 +43,12 @@ jobs:
         mkdir -p deploy-package
         # Verify standalone build exists
         if [ ! -d ".next/standalone" ]; then
-          echo "错误: 未找到 standalone 构建文件"
+          echo "❌ 错误: 未找到 standalone 构建文件"
           echo "请确保 next.config.ts 中设置了 output: 'standalone'"
           exit 1
         fi
         # Copy standalone build output (preserve directory structure)
-        echo "复制 standalone 构建文件"
+        echo "📦 复制 standalone 构建文件"
         mkdir -p deploy-package/.next
         cp -r .next/standalone deploy-package/.next/
         mkdir -p deploy-package/.next/static
@@ -58,19 +58,55 @@ jobs:
         # Copy deployment scripts
         cp deploy.sh deploy-package/
         cp next-ai-draw-io.service deploy-package/
-        # Verify deployment package structure
-        echo "验证部署包结构:"
-        ls -la deploy-package/
-        if [ -d "deploy-package/.next" ]; then
-          echo ".next 目录内容:"
-          ls -la deploy-package/.next/
-          if [ -d "deploy-package/.next/standalone" ]; then
-            echo ".next/standalone 目录内容:"
-            ls -la deploy-package/.next/standalone/ | head -10
-          fi
-        fi
         # Note: Do not copy .env files via GitHub Actions for security
         # Add them directly on the server or use GitHub Secrets
+
+    - name: Validate deployment package
+      run: |
+        echo "🔍 验证部署包结构..."
+        # Check root directory structure
+        if [ ! -d "deploy-package/.next" ]; then
+          echo "❌ 错误: deploy-package/.next 目录不存在"
+          exit 1
+        fi
+        if [ ! -d "deploy-package/public" ]; then
+          echo "❌ 错误: deploy-package/public 目录不存在"
+          exit 1
+        fi
+        if [ ! -f "deploy-package/deploy.sh" ]; then
+          echo "❌ 错误: deploy-package/deploy.sh 文件不存在"
+          exit 1
+        fi
+        if [ ! -f "deploy-package/next-ai-draw-io.service" ]; then
+          echo "❌ 错误: deploy-package/next-ai-draw-io.service 文件不存在"
+          exit 1
+        fi
+        # Check .next/standalone directory
+        if [ ! -d "deploy-package/.next/standalone" ]; then
+          echo "❌ 错误: deploy-package/.next/standalone 目录不存在"
+          exit 1
+        fi
+        if [ ! -f "deploy-package/.next/standalone/server.js" ]; then
+          echo "❌ 错误: deploy-package/.next/standalone/server.js 文件不存在"
+          exit 1
+        fi
+        # Check .next/static directory
+        if [ ! -d "deploy-package/.next/static" ]; then
+          echo "⚠️  警告: deploy-package/.next/static 目录不存在（可能为空）"
+        fi
+        # Display deployment package structure
+        echo "✅ 部署包结构验证通过"
+        echo "📁 部署包内容:"
+        ls -la deploy-package/
+        echo ""
+        echo "📁 .next 目录内容:"
+        ls -la deploy-package/.next/
+        echo ""
+        echo "📁 .next/standalone 目录内容（前10项）:"
+        ls -la deploy-package/.next/standalone/ | head -10
+        echo ""
+        echo "📁 .next/static 目录内容（前10项）:"
+        ls -la deploy-package/.next/static/ | head -10 || echo "（目录为空或不存在）"
 
     - name: Deploy to server
       uses: appleboy/scp-action@v0.1.7
