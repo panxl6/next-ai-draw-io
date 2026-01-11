@@ -183,6 +183,18 @@ if [ ! -f "$NODE_CMD" ] && ! command -v "$NODE_CMD" &> /dev/null; then
     exit 1
 fi
 
+# Verify node is executable
+if [ -f "$NODE_CMD" ] && [ ! -x "$NODE_CMD" ]; then
+    echo "警告: Node.js 文件不可执行，尝试添加执行权限..."
+    sudo chmod +x "$NODE_CMD" || echo "无法添加执行权限"
+fi
+
+# Test node execution
+if ! "$NODE_CMD" --version &> /dev/null; then
+    echo "警告: 无法执行 Node.js，请检查权限"
+    ls -l "$NODE_CMD" || true
+fi
+
 # Update service file with correct paths
 echo "配置 systemd 服务..."
 echo "服务器脚本: $SERVER_SCRIPT"
@@ -203,6 +215,19 @@ sed -i "s|^WorkingDirectory=.*|WorkingDirectory=$SERVER_DIR|" "$TEMP_SERVICE"
 DEPLOY_USER=$(whoami)
 sed -i "s|^User=.*|User=$DEPLOY_USER|" "$TEMP_SERVICE"
 sed -i "s|^Group=.*|Group=$DEPLOY_USER|" "$TEMP_SERVICE"
+
+# Fix systemd security settings to allow Node.js execution
+# ProtectSystem=strict blocks /usr (read-only mount), preventing execution of /usr/local/bin/node
+NODE_DIR=$(dirname "$NODE_CMD")
+echo "Node.js 目录: $NODE_DIR"
+# If Node.js is in /usr/local/bin or /usr/bin, we need to adjust security settings
+if [[ "$NODE_DIR" == "/usr/local/bin" ]] || [[ "$NODE_DIR" == "/usr/bin" ]]; then
+    echo "调整 systemd 安全设置以允许执行 Node.js..."
+    # Change ProtectSystem=strict to ProtectSystem=true
+    # ProtectSystem=true allows read/execute but restricts write access (more permissive than strict)
+    sed -i "s|^ProtectSystem=strict|ProtectSystem=true|" "$TEMP_SERVICE"
+    echo "已将 ProtectSystem=strict 改为 ProtectSystem=true"
+fi
 
 # Verify the service file
 echo "验证服务文件配置..."
