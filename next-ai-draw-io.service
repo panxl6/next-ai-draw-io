@@ -1,0 +1,38 @@
+[Unit]
+Description=Next.js AI Draw.io Application
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/next-ai-draw-io
+Environment=NODE_ENV=production
+Environment=PORT=6001
+Environment=HOSTNAME=0.0.0.0
+Environment=NEXT_TELEMETRY_DISABLED=1
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/next-ai-draw-io
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=200
+StartLimitBurst=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=next-ai-draw-io
+
+# Start command
+ExecStart=/usr/bin/node server.js
+
+[Install]
+WantedBy=multi-user.target
+
