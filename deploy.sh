@@ -74,10 +74,12 @@ sudo mkdir -p "$APP_DIR"
 echo "停止服务..."
 sudo systemctl stop "$SERVICE_NAME" || true
 
-# Copy new files
+# Copy new files (including hidden files like .next and .env.production)
 echo "复制新文件..."
 sudo rm -rf "$APP_DIR"/*
-sudo cp -r "$DEPLOY_DIR"/* "$APP_DIR/"
+sudo rm -rf "$APP_DIR"/.[!.]* 2>/dev/null || true
+# Use rsync or copy with dotglob to include hidden files
+sudo cp -r "$DEPLOY_DIR"/. "$APP_DIR/"
 
 # Set correct ownership (use the user running the script)
 DEPLOY_USER=$(whoami)
