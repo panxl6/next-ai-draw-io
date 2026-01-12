@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=www-data
 Group=www-data
-WorkingDirectory=/opt/next-ai-draw-io
+WorkingDirectory=/opt/next-ai-draw-io/.next/standalone
 Environment=NODE_ENV=production
 Environment=PORT=6002
 Environment=HOSTNAME=0.0.0.0
@@ -15,7 +15,6 @@ Environment=NEXT_TELEMETRY_DISABLED=1
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/opt/next-ai-draw-io
 
@@ -30,8 +29,8 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=next-ai-draw-io
 
-# Start command
-ExecStart=/usr/bin/node server.js
+# Start command (will be updated by deploy.sh with correct paths)
+ExecStart=/usr/local/bin/node /opt/next-ai-draw-io/.next/standalone/server.js
 
 [Install]
 WantedBy=multi-user.target

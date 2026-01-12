@@ -11,13 +11,30 @@ APP_DIR="/opt/${APP_NAME}"
 SERVICE_NAME="${APP_NAME}.service"
 PORT=${PORT:-6002}
 
-# Find Node.js executable (check common locations)
-if command -v node &> /dev/null; then
-    NODE_CMD=$(which node)
-elif [ -f /usr/local/bin/node ]; then
+# Find Node.js executable (prefer system-wide installation for systemd compatibility)
+# Priority: /usr/local/bin/node > /usr/bin/node > nvm node
+# nvm-installed node doesn't work well with systemd services
+if [ -f /usr/local/bin/node ]; then
     NODE_CMD="/usr/local/bin/node"
 elif [ -f /usr/bin/node ]; then
     NODE_CMD="/usr/bin/node"
+elif command -v node &> /dev/null; then
+    NODE_CMD=$(which node)
+    # Check if it's an nvm installation (contains .nvm in path)
+    if [[ "$NODE_CMD" == *".nvm"* ]]; then
+        echo "⚠️  警告: 检测到 nvm 安装的 Node.js: $NODE_CMD"
+        echo "   nvm 安装的 Node.js 在 systemd 服务中可能无法正常工作"
+        echo "   建议使用系统级安装: sudo apt install nodejs 或使用 NodeSource"
+        echo "   参考: docs/SERVER_NODEJS_SETUP.md"
+        # Try to find system node as fallback
+        if [ -f /usr/local/bin/node ]; then
+            NODE_CMD="/usr/local/bin/node"
+            echo "   已切换到系统 Node.js: $NODE_CMD"
+        elif [ -f /usr/bin/node ]; then
+            NODE_CMD="/usr/bin/node"
+            echo "   已切换到系统 Node.js: $NODE_CMD"
+        fi
+    fi
 else
     NODE_CMD="node"
 fi
@@ -172,9 +189,14 @@ TEMP_SERVICE=$(mktemp)
 cp "$APP_DIR/$SERVICE_NAME" "$TEMP_SERVICE"
 
 # Update paths using sed (no sudo needed for temp file)
-# Use /bin/sh -c to ensure proper execution environment
-sed -i "s|^ExecStart=.*|ExecStart=/bin/sh -c \"$NODE_CMD $SERVER_SCRIPT\"|" "$TEMP_SERVICE"
-sed -i "s|^WorkingDirectory=.*|WorkingDirectory=$SERVER_DIR|" "$TEMP_SERVICE"
+# Escape special characters in paths for sed
+NODE_CMD_ESCAPED=$(echo "$NODE_CMD" | sed 's/[&/\]/\\&/g')
+SERVER_SCRIPT_ESCAPED=$(echo "$SERVER_SCRIPT" | sed 's/[&/\]/\\&/g')
+SERVER_DIR_ESCAPED=$(echo "$SERVER_DIR" | sed 's/[&/\]/\\&/g')
+
+# Use direct node execution (simpler and more reliable)
+sed -i "s|^ExecStart=.*|ExecStart=${NODE_CMD_ESCAPED} ${SERVER_SCRIPT_ESCAPED}|" "$TEMP_SERVICE"
+sed -i "s|^WorkingDirectory=.*|WorkingDirectory=${SERVER_DIR_ESCAPED}|" "$TEMP_SERVICE"
 
 # Update User to match deploy user if needed
 DEPLOY_USER=$(whoami)
@@ -228,13 +250,18 @@ fi
 
 # Verify the service file
 echo "验证服务文件配置..."
-# Check if ExecStart contains the node command (with shell wrapper)
-if ! grep -q "ExecStart=.*$NODE_CMD.*$SERVER_SCRIPT" "$TEMP_SERVICE"; then
-    echo "警告: ExecStart 可能未正确更新，检查服务文件..."
-    grep "^ExecStart=" "$TEMP_SERVICE" || echo "未找到 ExecStart 行"
+# Check if ExecStart contains the node command
+EXEC_START_LINE=$(grep "^ExecStart=" "$TEMP_SERVICE" || echo "")
+if [ -z "$EXEC_START_LINE" ]; then
+    echo "❌ 错误: 未找到 ExecStart 行"
+    exit 1
+elif echo "$EXEC_START_LINE" | grep -q "$SERVER_SCRIPT"; then
+    echo "✅ ExecStart 已正确配置:"
+    echo "   $EXEC_START_LINE"
 else
-    echo "ExecStart 已正确配置:"
-    grep "^ExecStart=" "$TEMP_SERVICE"
+    echo "⚠️  警告: ExecStart 可能未正确更新:"
+    echo "   $EXEC_START_LINE"
+    echo "   期望包含: $SERVER_SCRIPT"
 fi
 
 # Display full service file for debugging
