@@ -156,7 +156,7 @@ jobs:
         ls -lh deploy-package.tar.gz
         echo ""
         echo "验证压缩包内容:"
-        tar -tzf deploy-package.tar.gz | head -20
+        tar -tzf deploy-package.tar.gz | head -20 || true
 
     - name: Deploy to server
       uses: appleboy/scp-action@v0.1.7
