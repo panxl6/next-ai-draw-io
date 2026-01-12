@@ -13,10 +13,14 @@ const path = require("path")
 
 const port = parseInt(process.env.PORT || "6002", 10)
 const dev = process.env.NODE_ENV !== "production"
-const hostname = process.env.HOSTNAME || "localhost"
+// For server binding, use 0.0.0.0 to listen on all interfaces
+const bindHostname = process.env.HOSTNAME || "0.0.0.0"
+// For Next.js app, don't pass hostname - let it use request headers
+// This prevents Next.js from generating URLs with 0.0.0.0
 // Support HTTP mode via USE_HTTP environment variable
 const useHttp = process.env.USE_HTTP === "true" || process.env.USE_HTTP === "1"
-const app = next({ dev, hostname, port })
+// Don't pass hostname to Next.js - it will use the Host header from requests
+const app = next({ dev, port })
 const handle = app.getRequestHandler()
 
 const certDir = path.join(__dirname, ".cert")
@@ -110,13 +114,14 @@ function startServer() {
 
         if (useHttp) {
             // HTTP mode
-            createHttpServer(requestHandler).listen(port, hostname, (err) => {
+            createHttpServer(requestHandler).listen(port, bindHostname, (err) => {
                 if (err) throw err
                 const protocol = "http"
-                const displayHost = hostname === "0.0.0.0" 
-                    ? (process.env.PUBLIC_URL ? new URL(process.env.PUBLIC_URL).hostname : "0.0.0.0")
-                    : hostname
-                console.log(`\n✅ Ready on ${protocol}://${displayHost}:${port}`)
+                const displayHost = bindHostname === "0.0.0.0" 
+                    ? (process.env.PUBLIC_URL ? new URL(process.env.PUBLIC_URL).hostname + ":" + port : "0.0.0.0:" + port)
+                    : bindHostname + ":" + port
+                console.log(`\n✅ Ready on ${protocol}://${displayHost}`)
+                console.log(`   Listening on ${bindHostname}:${port}`)
             })
         } else {
             // HTTPS mode
@@ -125,13 +130,14 @@ function startServer() {
                 cert: fs.readFileSync(certPath),
             }
 
-            createHttpsServer(options, requestHandler).listen(port, hostname, (err) => {
+            createHttpsServer(options, requestHandler).listen(port, bindHostname, (err) => {
                 if (err) throw err
                 const protocol = "https"
-                const displayHost = hostname === "0.0.0.0" 
-                    ? (process.env.PUBLIC_URL ? new URL(process.env.PUBLIC_URL).hostname : "0.0.0.0")
-                    : hostname
-                console.log(`\n✅ Ready on ${protocol}://${displayHost}:${port}`)
+                const displayHost = bindHostname === "0.0.0.0" 
+                    ? (process.env.PUBLIC_URL ? new URL(process.env.PUBLIC_URL).hostname + ":" + port : "0.0.0.0:" + port)
+                    : bindHostname + ":" + port
+                console.log(`\n✅ Ready on ${protocol}://${displayHost}`)
+                console.log(`   Listening on ${bindHostname}:${port}`)
                 console.log(
                     `\n⚠️  Using self-signed certificate - browser will show security warning`,
                 )

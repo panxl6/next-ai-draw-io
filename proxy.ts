@@ -59,12 +59,10 @@ export function proxy(request: NextRequest) {
         return
     }
 
-    // Force HTTPS redirect - Security: Only allow HTTPS in production
-    // In production, all HTTP requests must be redirected to HTTPS
-    if (
-        process.env.NODE_ENV === "production" ||
-        process.env.FORCE_HTTPS === "true"
-    ) {
+    // Force HTTPS redirect - Only if explicitly enabled
+    // Don't force HTTPS if USE_HTTP=true (server running in HTTP mode)
+    // Only redirect if FORCE_HTTPS is explicitly set to "true"
+    if (process.env.FORCE_HTTPS === "true" && process.env.USE_HTTP !== "true") {
         const protocol =
             request.headers.get("x-forwarded-proto") ||
             (request.url.startsWith("https://") ? "https" : "http")
