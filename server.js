@@ -35,17 +35,20 @@ function checkSelfsignedModule() {
 
 // Auto-generate certificates if they don't exist and not using HTTP mode
 if (!useHttp && (!fs.existsSync(keyPath) || !fs.existsSync(certPath))) {
-    console.log("🔐 SSL certificates not found. Generating now...\n")
+    console.log("🔐 SSL certificates not found. Attempting to generate...\n")
 
     // Check if selfsigned module is installed
     if (!checkSelfsignedModule()) {
-        console.error('❌ Missing required dependency: "selfsigned"')
-        console.error("\nPlease install dependencies first:")
-        console.error("   npm install\n")
-        console.error("Or install it specifically:")
-        console.error("   npm install --save-dev selfsigned\n")
-        console.error("Or use HTTP mode by setting USE_HTTP=true\n")
-        process.exit(1)
+        console.warn('⚠️  Missing dependency: "selfsigned"')
+        console.warn("   Cannot generate SSL certificates in production.")
+        console.warn("   Falling back to HTTP mode.\n")
+        console.warn("   To use HTTPS in production:")
+        console.warn("   1. Use a reverse proxy (Nginx) with Let's Encrypt")
+        console.warn("   2. Or set USE_HTTP=true explicitly\n")
+        // Fall back to HTTP mode
+        process.env.USE_HTTP = "true"
+        startServer()
+        return
     }
 
     // Set environment variable to indicate auto-generation (prevents duplicate message)
@@ -57,29 +60,36 @@ if (!useHttp && (!fs.existsSync(keyPath) || !fs.existsSync(certPath))) {
             fs.mkdirSync(certDir, { recursive: true })
         }
 
+        // Check if scripts directory exists (for standalone builds)
+        const scriptsPath = path.join(__dirname, "scripts", "generate-ssl-cert.js")
+        if (!fs.existsSync(scriptsPath)) {
+            console.warn("⚠️  Certificate generator script not found in standalone build")
+            console.warn("   Falling back to HTTP mode.\n")
+            console.warn("   For production HTTPS, use a reverse proxy (Nginx) with Let's Encrypt\n")
+            process.env.USE_HTTP = "true"
+            startServer()
+            return
+        }
+
         // Dynamically require and run the certificate generator
-        require("./scripts/generate-ssl-cert.js")
+        require(scriptsPath)
 
         // Verify certificates were created
         if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
             console.log("✅ Certificates generated successfully!\n")
             startServer()
         } else {
-            console.error(
-                "❌ Failed to generate certificates - files not found",
-            )
-            process.exit(1)
+            console.warn("⚠️  Failed to generate certificates - files not found")
+            console.warn("   Falling back to HTTP mode.\n")
+            process.env.USE_HTTP = "true"
+            startServer()
         }
     } catch (error) {
-        console.error("❌ Failed to generate SSL certificates:", error.message)
-        console.error("\nTroubleshooting:")
-        console.error("1. Ensure dependencies are installed: npm install")
-        console.error('2. Check that "selfsigned" is in devDependencies')
-        console.error(
-            "3. Try manually generating certificates: npm run generate-cert",
-        )
-        console.error("4. Or use HTTP mode by setting USE_HTTP=true\n")
-        process.exit(1)
+        console.warn("⚠️  Failed to generate SSL certificates:", error.message)
+        console.warn("   Falling back to HTTP mode.\n")
+        console.warn("   For production HTTPS, use a reverse proxy (Nginx) with Let's Encrypt\n")
+        process.env.USE_HTTP = "true"
+        startServer()
     }
 } else {
     startServer()
