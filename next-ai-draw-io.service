@@ -10,6 +10,8 @@ WorkingDirectory=/opt/next-ai-draw-io/.next/standalone
 Environment=NODE_ENV=production
 Environment=PORT=6002
 Environment=HOSTNAME=0.0.0.0
+Environment=USE_HTTP=true
+Environment=PUBLIC_URL=http://43.128.81.143:6002
 Environment=NEXT_TELEMETRY_DISABLED=1
 
 # Security hardening
