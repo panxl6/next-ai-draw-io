@@ -146,6 +146,18 @@ jobs:
         echo "📁 .next/static 目录内容（前10项）:"
         ls -la deploy-package/.next/static/ | head -10 || echo "（目录为空或不存在）"
 
+    - name: Create deployment archive
+      run: |
+        echo "📦 创建部署压缩包..."
+        cd deploy-package
+        tar -czf ../deploy-package.tar.gz .
+        cd ..
+        echo "✅ 压缩包创建完成"
+        ls -lh deploy-package.tar.gz
+        echo ""
+        echo "验证压缩包内容:"
+        tar -tzf deploy-package.tar.gz | head -20
+
     - name: Deploy to server
       uses: appleboy/scp-action@v0.1.7
       with:
@@ -153,12 +165,40 @@ jobs:
         username: ${{ secrets.SERVER_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: ${{ secrets.SERVER_PORT || 22 }}
-        source: "deploy-package"
-        target: "/tmp/deploy-next-ai-draw-io"
-        strip_components: 1
+        source: "deploy-package.tar.gz"
+        target: "/tmp"
         timeout: 30s
         command_timeout: 10m
         debug: true
+
+    - name: Extract deployment files on server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: ${{ secrets.SERVER_PORT || 22 }}
+        timeout: 30s
+        command_timeout: 10m
+        debug: true
+        script: |
+          echo "📦 解压部署文件..."
+          mkdir -p /tmp/deploy-next-ai-draw-io
+          cd /tmp/deploy-next-ai-draw-io
+          tar -xzf /tmp/deploy-package.tar.gz
+          rm -f /tmp/deploy-package.tar.gz
+          echo "✅ 解压完成"
+          echo ""
+          echo "验证解压后的文件:"
+          ls -la /tmp/deploy-next-ai-draw-io/
+          echo ""
+          if [ -d "/tmp/deploy-next-ai-draw-io/.next" ]; then
+            echo "✅ .next 目录存在"
+            ls -la /tmp/deploy-next-ai-draw-io/.next/
+          else
+            echo "❌ 错误: .next 目录不存在"
+            exit 1
+          fi
 
     - name: Verify deployment files
       uses: appleboy/ssh-action@v1.0.3
