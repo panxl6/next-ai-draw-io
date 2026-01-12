@@ -12,31 +12,47 @@ SERVICE_NAME="${APP_NAME}.service"
 PORT=${PORT:-6002}
 
 # Find Node.js executable (prefer system-wide installation for systemd compatibility)
-# Priority: /usr/local/bin/node > /usr/bin/node > nvm node
+# Priority: /usr/bin/nodejs > /usr/bin/node > /usr/local/bin/node > nvm node
+# Debian/Ubuntu systems install Node.js as /usr/bin/nodejs
 # nvm-installed node doesn't work well with systemd services
-if [ -f /usr/local/bin/node ]; then
-    NODE_CMD="/usr/local/bin/node"
+if [ -f /usr/bin/nodejs ]; then
+    NODE_CMD="/usr/bin/nodejs"
+    echo "✓ 使用系统 Node.js: $NODE_CMD"
 elif [ -f /usr/bin/node ]; then
     NODE_CMD="/usr/bin/node"
+    echo "✓ 使用系统 Node.js: $NODE_CMD"
+elif [ -f /usr/local/bin/node ]; then
+    NODE_CMD="/usr/local/bin/node"
+    echo "✓ 使用系统 Node.js: $NODE_CMD"
+elif command -v nodejs &> /dev/null; then
+    NODE_CMD=$(which nodejs)
+    echo "✓ 使用 nodejs 命令: $NODE_CMD"
 elif command -v node &> /dev/null; then
     NODE_CMD=$(which node)
     # Check if it's an nvm installation (contains .nvm in path)
     if [[ "$NODE_CMD" == *".nvm"* ]]; then
         echo "⚠️  警告: 检测到 nvm 安装的 Node.js: $NODE_CMD"
         echo "   nvm 安装的 Node.js 在 systemd 服务中可能无法正常工作"
-        echo "   建议使用系统级安装: sudo apt install nodejs 或使用 NodeSource"
-        echo "   参考: docs/SERVER_NODEJS_SETUP.md"
+        echo "   尝试查找系统级 Node.js..."
         # Try to find system node as fallback
-        if [ -f /usr/local/bin/node ]; then
-            NODE_CMD="/usr/local/bin/node"
-            echo "   已切换到系统 Node.js: $NODE_CMD"
+        if [ -f /usr/bin/nodejs ]; then
+            NODE_CMD="/usr/bin/nodejs"
+            echo "   ✓ 已切换到系统 Node.js: $NODE_CMD"
         elif [ -f /usr/bin/node ]; then
             NODE_CMD="/usr/bin/node"
-            echo "   已切换到系统 Node.js: $NODE_CMD"
+            echo "   ✓ 已切换到系统 Node.js: $NODE_CMD"
+        elif [ -f /usr/local/bin/node ]; then
+            NODE_CMD="/usr/local/bin/node"
+            echo "   ✓ 已切换到系统 Node.js: $NODE_CMD"
+        else
+            echo "   ❌ 未找到系统级 Node.js，将使用 nvm 版本（可能失败）"
         fi
     fi
 else
-    NODE_CMD="node"
+    echo "❌ 错误: 未找到 Node.js 可执行文件"
+    echo "   请安装 Node.js: sudo apt install nodejs 或使用 NodeSource"
+    echo "   参考: docs/SERVER_NODEJS_SETUP.md"
+    exit 1
 fi
 
 echo "======================================"
@@ -64,11 +80,16 @@ if [ ! -d "$DEPLOY_DIR/.next/standalone" ]; then
 fi
 
 # Display Node.js version and check compatibility
-if command -v node &> /dev/null; then
-    NODE_VERSION=$(node --version)
+if [ -f "$NODE_CMD" ] || command -v "$NODE_CMD" &> /dev/null; then
+    NODE_VERSION=$("$NODE_CMD" --version)
     echo "Node.js 版本: $NODE_VERSION"
-    echo "npm 版本: $(npm --version || echo '未安装')"
-    echo "Node.js 路径: $(which node)"
+    echo "Node.js 路径: $NODE_CMD"
+    # Try to get npm version (may not be available)
+    if command -v npm &> /dev/null; then
+        echo "npm 版本: $(npm --version)"
+    else
+        echo "npm: 未安装或不在 PATH 中"
+    fi
     
     # Check Node.js version (should be 20+ or 24+)
     NODE_MAJOR=$(echo "$NODE_VERSION" | sed 's/v\([0-9]*\).*/\1/')
@@ -76,9 +97,11 @@ if command -v node &> /dev/null; then
         echo "⚠️  警告: Node.js 版本 $NODE_VERSION 可能不兼容"
         echo "   推荐使用 Node.js 20+ 或 24+"
         echo "   请参考 docs/SERVER_NODEJS_SETUP.md 升级 Node.js"
+    else
+        echo "✓ Node.js 版本检查通过"
     fi
 else
-    echo "❌ 错误: 未找到 Node.js 命令"
+    echo "❌ 错误: Node.js 命令不可用: $NODE_CMD"
     echo "   请安装 Node.js 20+ 或 24+"
     echo "   参考: docs/SERVER_NODEJS_SETUP.md"
     exit 1
@@ -208,12 +231,18 @@ NODE_DIR=$(dirname "$NODE_CMD")
 echo "Node.js 目录: $NODE_DIR"
 
 # Adjust systemd security settings to allow Node.js execution
+# System-wide Node.js installations are in /usr/bin or /usr/local/bin
 if [[ "$NODE_DIR" == "/usr/local/bin" ]] || [[ "$NODE_DIR" == "/usr/bin" ]]; then
-    echo "调整 systemd 安全设置以允许执行 Node.js..."
+    echo "✓ 检测到系统级 Node.js 安装，调整 systemd 安全设置..."
     # Completely remove ProtectSystem to allow execution
     # This is necessary because ProtectSystem=strict/true can block execution
     sed -i "/^ProtectSystem=/d" "$TEMP_SERVICE"
-    echo "已移除 ProtectSystem 限制"
+    echo "  已移除 ProtectSystem 限制"
+else
+    echo "⚠️  警告: Node.js 不在标准系统路径中: $NODE_DIR"
+    echo "  可能需要调整 systemd 安全设置"
+    sed -i "/^ProtectSystem=/d" "$TEMP_SERVICE"
+    echo "  已移除 ProtectSystem 限制"
 fi
 
 # Ensure PATH is set for the service user (only once, before ExecStart)

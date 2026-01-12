@@ -30,7 +30,8 @@ StandardError=journal
 SyslogIdentifier=next-ai-draw-io
 
 # Start command (will be updated by deploy.sh with correct paths)
-ExecStart=/usr/local/bin/node /opt/next-ai-draw-io/.next/standalone/server.js
+# Default to /usr/bin/nodejs (Debian/Ubuntu standard) or /usr/bin/node
+ExecStart=/usr/bin/nodejs /opt/next-ai-draw-io/.next/standalone/server.js
 
 [Install]
 WantedBy=multi-user.target
