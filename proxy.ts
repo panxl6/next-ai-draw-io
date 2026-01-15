@@ -59,10 +59,12 @@ export function proxy(request: NextRequest) {
         return
     }
 
-    // Force HTTPS redirect - Only if explicitly enabled
-    // Don't force HTTPS if USE_HTTP=true (server running in HTTP mode)
-    // Only redirect if FORCE_HTTPS is explicitly set to "true"
-    if (process.env.FORCE_HTTPS === "true" && process.env.USE_HTTP !== "true") {
+    // HTTPS redirect is disabled by default
+    // Application now uses HTTP by default
+    // For production HTTPS, configure a reverse proxy (Nginx) with SSL certificates
+    // Uncomment the following code if you need to force HTTPS redirect:
+    /*
+    if (process.env.FORCE_HTTPS === "true") {
         const protocol =
             request.headers.get("x-forwarded-proto") ||
             (request.url.startsWith("https://") ? "https" : "http")
@@ -84,6 +86,7 @@ export function proxy(request: NextRequest) {
             }
         }
     }
+    */
 
     // Check authentication for protected routes
     // Skip API routes (except auth routes) and public paths
