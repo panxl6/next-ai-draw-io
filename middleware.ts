@@ -47,7 +47,7 @@ function isAuthenticated(request: NextRequest): boolean {
     return authCookie?.value === SESSION_TOKEN
 }
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname
 
     // Skip static files and Next.js internals
@@ -96,7 +96,9 @@ export function proxy(request: NextRequest) {
     if (!isApiRoute && !isPublic) {
         if (!isAuthenticated(request)) {
             // Redirect to login page with the original URL as a parameter
-            const loginUrl = new URL("/login", request.url)
+            // Use nextUrl to preserve the correct host from the request
+            const loginUrl = request.nextUrl.clone()
+            loginUrl.pathname = "/login"
             loginUrl.searchParams.set("from", pathname)
             return NextResponse.redirect(loginUrl)
         }
@@ -118,12 +120,10 @@ export function proxy(request: NextRequest) {
         const locale = getLocale(request)
 
         // Redirect to localized path
-        return NextResponse.redirect(
-            new URL(
-                `/${locale}${pathname.startsWith("/") ? "" : "/"}${pathname}`,
-                request.url,
-            ),
-        )
+        // Use nextUrl.clone() to preserve the correct host from the request
+        const localizedUrl = request.nextUrl.clone()
+        localizedUrl.pathname = `/${locale}${pathname.startsWith("/") ? "" : "/"}${pathname}`
+        return NextResponse.redirect(localizedUrl)
     }
 }
 
