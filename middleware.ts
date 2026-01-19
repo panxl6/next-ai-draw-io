@@ -47,6 +47,33 @@ function isAuthenticated(request: NextRequest): boolean {
     return authCookie?.value === SESSION_TOKEN
 }
 
+// Helper to build redirect URL using the Host header from the request
+// This prevents redirects to 0.0.0.0 when server binds to that address
+function buildRedirectUrl(request: NextRequest, pathname: string, searchParams?: URLSearchParams): URL {
+    // Get the actual host from the request headers
+    const host = request.headers.get("host") || request.headers.get("x-forwarded-host")
+    // Get protocol from x-forwarded-proto or default to http
+    const protocol = request.headers.get("x-forwarded-proto") || "http"
+    
+    if (host) {
+        const url = new URL(`${protocol}://${host}${pathname}`)
+        if (searchParams) {
+            searchParams.forEach((value, key) => {
+                url.searchParams.set(key, value)
+            })
+        }
+        return url
+    }
+    
+    // Fallback to nextUrl if host header is not available
+    const url = request.nextUrl.clone()
+    url.pathname = pathname
+    if (searchParams) {
+        url.search = searchParams.toString()
+    }
+    return url
+}
+
 export function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname
 
@@ -62,31 +89,6 @@ export function middleware(request: NextRequest) {
     // HTTPS redirect is disabled by default
     // Application now uses HTTP by default
     // For production HTTPS, configure a reverse proxy (Nginx) with SSL certificates
-    // Uncomment the following code if you need to force HTTPS redirect:
-    /*
-    if (process.env.FORCE_HTTPS === "true") {
-        const protocol =
-            request.headers.get("x-forwarded-proto") ||
-            (request.url.startsWith("https://") ? "https" : "http")
-
-        // If request is HTTP, redirect to HTTPS
-        if (protocol === "http" || request.url.startsWith("http://")) {
-            try {
-                const url = new URL(request.url)
-                url.protocol = "https"
-                // If using standard HTTPS port, remove port number for cleaner URLs
-                if (url.port === "443") {
-                    url.port = ""
-                }
-                return NextResponse.redirect(url.toString(), 301)
-            } catch {
-                // If URL parsing fails, construct HTTPS URL
-                const httpsUrl = request.url.replace("http://", "https://")
-                return NextResponse.redirect(httpsUrl, 301)
-            }
-        }
-    }
-    */
 
     // Check authentication for protected routes
     // Skip API routes (except auth routes) and public paths
@@ -96,10 +98,9 @@ export function middleware(request: NextRequest) {
     if (!isApiRoute && !isPublic) {
         if (!isAuthenticated(request)) {
             // Redirect to login page with the original URL as a parameter
-            // Use nextUrl to preserve the correct host from the request
-            const loginUrl = request.nextUrl.clone()
-            loginUrl.pathname = "/login"
-            loginUrl.searchParams.set("from", pathname)
+            const searchParams = new URLSearchParams()
+            searchParams.set("from", pathname)
+            const loginUrl = buildRedirectUrl(request, "/login", searchParams)
             return NextResponse.redirect(loginUrl)
         }
     }
@@ -120,9 +121,8 @@ export function middleware(request: NextRequest) {
         const locale = getLocale(request)
 
         // Redirect to localized path
-        // Use nextUrl.clone() to preserve the correct host from the request
-        const localizedUrl = request.nextUrl.clone()
-        localizedUrl.pathname = `/${locale}${pathname.startsWith("/") ? "" : "/"}${pathname}`
+        const localizedPath = `/${locale}${pathname.startsWith("/") ? "" : "/"}${pathname}`
+        const localizedUrl = buildRedirectUrl(request, localizedPath)
         return NextResponse.redirect(localizedUrl)
     }
 }

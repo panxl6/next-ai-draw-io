@@ -25,19 +25,18 @@ export async function POST(request: Request) {
         if (username === VALID_USERNAME && password === VALID_PASSWORD) {
             const cookieStore = await cookies()
 
-            // Check if request is over HTTPS
-            // In production, always use secure flag
-            // In development, use secure flag if HTTPS is enabled
+            // Check if request is actually over HTTPS
+            // Only set secure flag when the connection is truly HTTPS
+            // This allows the cookie to work over HTTP in production if needed
             const isSecure =
-                process.env.NODE_ENV === "production" ||
-                process.env.HTTPS === "true" ||
                 request.headers.get("x-forwarded-proto") === "https" ||
-                request.headers.get("x-forwarded-ssl") === "on"
+                request.headers.get("x-forwarded-ssl") === "on" ||
+                process.env.HTTPS === "true"
 
             // Set authentication cookie
             cookieStore.set(AUTH_COOKIE_NAME, SESSION_TOKEN, {
                 httpOnly: true,
-                secure: isSecure, // Use secure flag in production or when HTTPS is enabled
+                secure: isSecure, // Only use secure flag when actually using HTTPS
                 sameSite: "lax",
                 maxAge: 60 * 60 * 24 * 30, // 30 days
                 path: "/",
